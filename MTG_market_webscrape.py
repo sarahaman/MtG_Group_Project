@@ -69,9 +69,17 @@ for n, p in enumerate(setTuples):
             for j in range(len(df['Card Name'])):
                 setName.append(str(p[0]))
             df['Set Name'] = setName
+            
+            for y, l in enumerate(df['Serial no.']):
+                if '$' in l:
+                    df['Listed Median'][y] = df['Buylist Price'][y]
+                    df['Buylist Price'][y] = df['Market Price'][y]
+                    df['Market Price'][y] = df['Serial no.'][y]
+                    df['Serial no.'][y] = ''
+                    
             finalDF = pd.concat([finalDF, df])
     except:
         continue
-    
+
 finalDF.to_csv(r'C:\Users\howle\Desktop\Data Munging\MTG Market Info.csv',
-               index=False)
+                index=False)
