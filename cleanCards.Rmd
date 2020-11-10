@@ -1,0 +1,176 @@
+
+
+
+```{r}
+
+###############################################
+##########    ###  LIBRARIES  ###    ##########
+###############################################
+
+library(tidyverse)
+library(tm)
+
+```
+
+# FOR SARA
+
+```{r}
+###############################################
+##########    ###    CARDS    ###    ##########
+###############################################
+
+# READING IN THE DATA
+
+cardsRaw <- read_csv("cards.csv", col_names = TRUE)
+# head(cardsRaw)
+
+#SELECTING RELEVANT COLUMNS
+keepCols <- c("uuid", "mcmId", "mtgjsonV4Id", "multiverseId", "name", "type", "subtypes", "supertypes", "manaCost", "convertedManaCost", "keywords", "text", "flavorText",  "power", "toughness", "rarity", "edhrecRank", "isOnlineOnly")
+
+cards <- select_(cardsRaw, .dots = keepCols)
+
+# head(cards)
+
+# CLEANING TYPES
+cards$type <- word(cards$type, 1, sep=" —")
+
+# REMOVING SPECIAL CHARACTERS FROM THE TEXT VARIABLES
+cards$text <- str_replace_all(cards$text, "[[:punct:]]", "")
+cards$flavorText <- str_replace_all(cards$flavorText, "[[:punct:]]", "")
+
+# CLEANING THE MANA CLUSTERFUCK
+
+# If the manaCost is NA, replace it with Z so that it can be processed by str_detect. Converted back later.
+cards$manaCost <- replace_na(cards$manaCost, "Z")
+
+#Removing the brackets
+cards$manaCost = str_replace_all(cards$manaCost, "[{}]", "")
+
+#Creating a variable to hold the 'generic' mana cost
+cards$genericManaCost <- NA
+
+# Counting the generic mana cost for each row
+  # If X is included in the data, that means the # of generic mana is determined by the game environment
+
+c = 1
+for (i in cards$manaCost){
+  a = str_detect(i, ".*[0-9].*")
+  if ( a == TRUE){
+    if (substr(i, start = 1, stop = 1) == 'X'){
+      cards$genericManaCost[c] <- "Determined in Game"
+    } else {
+    cards$genericManaCost[c] <- substr(i, start = 1, stop = 1) 
+    }
+  } else {
+    cards$genericManaCost[c] <- "No Generic Cost"
+  }
+c = c + 1
+}
+
+# Cleaning manaCost to remove data pertaining to generic mana
+
+cards$manaCost <- str_replace_all(cards$manaCost, 'X', '') %>%
+  removeNumbers()
+
+# HANDLING CARD COLOR
+
+# Creating the color variable
+cards$manaColor <- NA
+
+# Splitting the letters so that they can be compared, these are put in a temporary variable 
+cards$temp <- str_split(cards$manaCost, "")
+
+# Identifying the mana color 
+  # If the card deals with more than one type of mana, it is assigned to the category "Multiple Types"
+
+c = 1
+for (i in cards$temp){
+  if (length(i) <= 1){
+    cards$manaColor[c] <- i[1]
+  } else if(i[1] == i[2]) {
+    cards$manaColor[c] <- i[1]
+  } else {
+    cards$manaColor[c] <- "Multiple Types"
+}
+c = c+1
+}
+
+# Colored mana cost is calculated by simply taking the length of the manaCost string (i.e., WWW would be 3)
+cards$colorManaCost <- nchar(cards$manaCost) 
+
+#Handling NA's 
+cards$manaColor[is.na(cards$manaColor)] <- "No Color"
+cards$manaColor[cards$manaColor == 'Z'] <- "No Color"
+cards$colorManaCost <- ifelse(cards$manaColor == "No Color", "No Color Cost", cards$colorManaCost)
+
+#Removing the depreciated columns
+cards <- subset(cards, select = -c(temp, manaCost))
+
+view(cards)
+
+###############################################
+##########    ###    SETS     ###    ##########
+###############################################
+
+# READING IN THE DATA
+
+setsRaw <- read_csv("sets.csv", col_names = TRUE)
+# head(setsRaw)
+
+#SELECTING RELEVANT COLUMNS
+keepColsSets <- c("mcmId", "name", "releaseDate")
+
+sets <- select_(setsRaw, .dots = keepColsSets) %>%
+  rename(
+    "setName" = "name"
+  )
+
+sets <- sets[!is.na(sets$mcmId), ]
+
+###############################################
+##########    ###    JOIN     ###    ##########
+###############################################
+
+# Joining cards with sets on MCM ID
+
+mtg <- left_join(cards, sets, by = "mcmId")
+
+# head(mtg)
+# sum(is.na(mtg$releaseDate))
+
+```
+
+# WRITING THE CSV 
+
+```{r}
+write.csv(mtg, "cleanData.csv")
+```
+
+# POST-DOWNLOAD FORMATTING 
+
+```{r}
+
+# TOKENIZING SUBTYPES
+mtg$subtypes <- str_split(mtg$subtypes, ",")
+
+# TOKENIZING KEYWORDS
+mtg$keywords <- str_split(mtg$keywords, ",")
+
+# TURNING RARITY INTO A FACTOR 
+mtg$rarity <- factor(mtg$rarity, levels = c("common", "uncommon", "rare", "mythic"), ordered = TRUE)
+
+#FORMATTING POWER AND TOUGHNESS CORRECTLY
+  # forces some to numeric, however upon investigation the cards turned to NA's are 'booster' cards, which are like spell cards
+  # these cards can be identified by their key words
+
+mtg$power <- as.numeric(mtg$power)
+mtg$toughness <- as.numeric(mtg$toughness)
+
+```
+
+```{r}
+
+head(mtg, 20)
+
+```
+
