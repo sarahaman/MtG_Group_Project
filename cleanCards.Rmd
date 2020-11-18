@@ -25,7 +25,7 @@ cardsRaw <- read_csv("cards.csv", col_names = TRUE)
 # head(cardsRaw)
 
 #SELECTING RELEVANT COLUMNS
-keepCols <- c("uuid", "mcmId", "mtgjsonV4Id", "multiverseId", "name", "type", "subtypes", "supertypes", "manaCost", "convertedManaCost", "keywords", "text", "flavorText",  "power", "toughness", "rarity", "edhrecRank", "isOnlineOnly")
+keepCols <- c("uuid", "mcmId", "mtgjsonV4Id", "multiverseId", "name", "artist", "type", "subtypes", "supertypes", "manaCost", "convertedManaCost", "keywords", "text", "flavorText",  "power", "toughness", "rarity", "edhrecRank", "isOnlineOnly")
 
 cards <- select_(cardsRaw, .dots = keepCols)
 
