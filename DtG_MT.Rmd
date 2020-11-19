@@ -1,0 +1,324 @@
+---
+title: "Data The Gathering"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(bookdown)
+library(tidyverse)
+library(knitr)
+library(PerformanceAnalytics)
+library(plotly)
+library(ggpubr)
+```
+
+
+```{r, include=FALSE}
+# cleaned Card data with price data
+cards <-  read_csv('Datasets/AllCardsAlt.csv')
+cards <- tibble(cards)
+cards <- cards[,-1]
+
+
+cards <- cards %>% mutate('year' = format(cards$releaseDate, format='%Y'))
+cards$year <- cards$year %>% as.character()
+cards$frameVersion <- cards$frameVersion %>% as.character()
+```
+
+# Descriptive Statistics
+
+The following table gives an overview of the numerical variables.  The variable convertedManaCost is an aspect of the card that is used in play. The variable edhrecRank is a score given to the card by the website EDHREC which provides card information.  The last four variables (mtgo, mtgoFoil, paper, and paperFoil) are different printing of the cards.  Mtgo and mtgoFoil are digital versions of the cards whereas paper and paperFoil are physical. The distribution is heavily skewed with a majority of the cards in the low price range with a few extremely high prices outliers.
+```{r,warning=FALSE, echo=FALSE, results='asis'}
+all.five <-
+  cards %>% 
+    summarise_if(is.numeric, fivenum, na.rm = TRUE)
+
+
+all.mean <-
+  cards %>%
+    summarise_if(is.numeric, mean, na.rm = TRUE)
+
+
+all.sd <-  
+  cards %>%
+    summarise_if(is.numeric, sd, na.rm = TRUE)
+
+
+all.five <- all.five %>% 
+  add_row(all.mean) %>% add_row(all.sd)
+
+row.names(all.five) <- c('minimum', 'lower-hinge', 
+                         'median', 'upper-hinge', 
+                         'maximum', 'mean', 'standard deviation')
+
+kable(all.five)
+```
+
+## Distribution of Prices
+
+Every type of card printing followed the same type of right skewed price distribution. The vast majority of the cards are priced in the lower range with some exreme outliers.
+```{r, warning=FALSE}
+p1 <- 
+cards[,'paper'] %>% 
+  ggplot() + 
+  geom_histogram(aes(x=paper, fill=I('darkgreen')),
+                 bins = 10) + 
+  labs(title = 'Price Distribution of Paper')
+
+p2 <- 
+cards[,'paperFoil'] %>% 
+  ggplot() + 
+  geom_histogram(aes(x=paperFoil, fill=I('darkgreen')),
+                 bins = 10) + 
+  labs(title = 'Price Distribution of Paper Foil')
+
+p3 <- 
+cards[,'mtgo'] %>% 
+  ggplot() + 
+  geom_histogram(aes(x=mtgo, fill=I('darkgreen')),
+                 bins = 10) + 
+  labs(title = 'Price Distribution of Digital')
+
+p4 <- 
+cards[,'mtgoFoil'] %>% 
+  ggplot() + 
+  geom_histogram(aes(x=mtgoFoil, fill=I('darkgreen')),
+                 bins = 10) + 
+  labs(title = 'Price Distribution of Digital Foil')
+
+ggarrange(p1,p2,p3,p4,nrow=2,ncol=2)
+```
+
+The following displays the distribution at the lower range of price (<$10).
+```{r, warning=FALSE}
+p1 <- 
+cards[,'paper'] %>% 
+  filter(paper < 10) %>%
+  ggplot() + 
+  geom_histogram(aes(x=paper, fill=I('darkgreen')), bins=30) + 
+  labs(title = 'Price Distribution of Paper')
+
+p2 <- 
+cards[,'paperFoil'] %>% 
+  filter(paperFoil < 10) %>%
+  ggplot() + 
+  geom_histogram(aes(x=paperFoil, fill=I('darkgreen')), bins=30) + 
+  labs(title = 'Price Distribution of Paper Foil')
+
+p3 <- 
+cards[,'mtgo'] %>% 
+  filter(mtgo < 10) %>%
+  ggplot() + 
+  geom_histogram(aes(x=mtgo, fill=I('darkgreen')), bins=30) + 
+  labs(title = 'Price Distribution of Digital')
+
+p4 <- 
+cards[,'mtgoFoil'] %>% 
+  filter(mtgoFoil < 10) %>%
+  ggplot() + 
+  geom_histogram(aes(x=mtgoFoil, fill=I('darkgreen')), bins=30) + 
+  labs(title = 'Price Distribution of Digital Foil')
+
+ggarrange(p1,p2,p3,p4,nrow=2,ncol=2)
+```
+
+
+## Correlation of Numerical Data
+None of the numerical categories show much correlation with the price variables.
+```{r, warning=FALSE}
+cards %>% 
+  sample_n(5000) %>%
+  select_if(is.numeric) %>%
+  chart.Correlation()
+```
+
+
+
+## Printing type
+
+The following is a comparison of how cards price in one type of printing corresponds to its price in another type of printing.  Often, higher prices in one type of printing correspond to higher prices in another.
+```{r, warning=FALSE}
+q1 <- 
+cards[,c("name","paper","paperFoil")]  %>%
+  filter(paper > 0 & paperFoil > 0)%>%
+  group_by(name) %>%
+  ggplot(aes(x = paper, y = paperFoil)) + 
+  geom_point() + 
+  geom_smooth()
+
+q2 <- 
+cards[,c("name","paper","mtgo")] %>%
+  filter(paper > 0 & mtgo > 0)%>%
+  group_by(name) %>%
+  ggplot(aes(x = paper, y = mtgo)) + 
+  geom_point() + 
+  geom_smooth()
+
+q3 <- 
+cards[,c("name","paperFoil","mtgoFoil")] %>%
+  filter(paperFoil > 0 & mtgoFoil>0) %>%
+  group_by(name) %>%
+  ggplot(aes(x = paperFoil, y = mtgoFoil)) + 
+  geom_point() + 
+  geom_smooth()
+
+q4 <- 
+cards[,c("name","mtgo","mtgoFoil")] %>%
+  filter(mtgo > 0 & mtgoFoil>0) %>%
+  group_by(name) %>%
+  ggplot(aes(x = mtgo, y = mtgoFoil)) + 
+  geom_point() + 
+  geom_smooth()
+
+q5 <- 
+cards[,c("name","paper","mtgoFoil")] %>%
+  filter(paper > 0 & mtgoFoil>0) %>%
+  group_by(name) %>%
+  ggplot(aes(x = paper, y = mtgoFoil)) + 
+  geom_point() + 
+  geom_smooth()
+
+q6 <- 
+cards[,c("name","mtgo","paperFoil")] %>%
+  filter(mtgo > 0 & paperFoil>0) %>%
+  group_by(name) %>%
+  ggplot(aes(x = mtgo, y = paperFoil)) + 
+  geom_point() + 
+  geom_smooth()
+
+
+ggarrange(q1,q2,q3,q4,q5,q6,ncol=2,nrow=3)
+```
+
+
+## Frame Version
+
+The frame version variable describes the style of the border around the card and is named by year. The earliest version of the frame is dominated by the 'paper' card type.  The later frame versions show that physical cards fetch higher prices on average with the foil versions fetch the highest price.
+```{r, warning=FALSE}
+# prices by frameVersion (Version of the card frame style.)
+cards[,c("frameVersion","mtgo","mtgoFoil","paper","paperFoil")] %>% 
+  gather(mtgo,mtgoFoil,paper,paperFoil, 
+         key='paperType', 
+         value='price',
+         na.rm = T) %>% 
+  filter(!is.na(frameVersion)) %>%
+  group_by(frameVersion,paperType) %>%
+  summarise_at('price',mean,rm.na = T) %>%
+  ggplot(aes(x = frameVersion, y = price, fill=paperType)) + 
+  geom_col(position='dodge') + 
+  labs(title='Mean Prices By Frame Version', fill='Printing') + 
+  xlab('Frame Version')
+```
+
+## Release Date
+
+The cards with the earliest release date fetch the highest prices by far followed by the cards released in 2001. The graph of the proportion of printings shows that foil cards begin to dominate the field around 1999. Interestingly, the 2001 release year had the greatest proportion of foil cards which may factor into the reason why that year had the second highest average price
+```{r}
+#mean price by release date and printing type
+cards %>% 
+  gather(mtgo,mtgoFoil,paper,paperFoil, 
+         key='paperType', 
+         value='price') %>% 
+  group_by(year, paperType) %>%
+  summarise_at('price',mean,rm.na=T) %>%
+  ggplot(aes(x = year, y = price, fill=paperType)) + 
+  geom_col() + theme(axis.text.x = element_text(angle = 45)) +
+  labs(title='Mean Price By Year And Printing', fill='Printing')
+
+
+#mean price by release date and printing type excluding the outlier
+cards %>% 
+  gather(mtgo,mtgoFoil,paper,paperFoil, 
+         key='paperType', 
+         value='price') %>% 
+  group_by(year, paperType) %>%
+  filter(year != '1993') %>%
+  summarise_at('price',mean,rm.na=T) %>%
+  ggplot(aes(x = year, y = price, fill=paperType)) + 
+  geom_col() + theme(axis.text.x = element_text(angle = 45)) +
+  labs(title='Mean Price By Year (>1993) And Printing', fill='Printing')
+
+
+# proportion of mean price by release date and printing type
+cards %>% 
+  gather(mtgo,mtgoFoil,paper,paperFoil, 
+         key='paperType', 
+         value='price') %>% 
+  group_by(year, paperType) %>%
+  summarise_at('price',mean,rm.na=T) %>%
+  ggplot(aes(x = year, y = price, fill=paperType)) + 
+  geom_col(position='fill') + theme(axis.text.x = element_text(angle = 45)) +
+  labs(title='Proportion of Average Price By Year And Printing', fill='Printing')
+```
+
+
+## Rarity
+
+In the plot of mean price by rarity, the physical cards fetch a higher price than the digital versions. The 'mythic' paper cards with foil fetch the highest price on average followed by the 'rare' paper cards.
+```{r, warning=FALSE}
+# rarity vs price
+cards[,c("rarity","mtgo","mtgoFoil","paper","paperFoil")] %>% 
+  gather(mtgo,mtgoFoil,paper,paperFoil, 
+         key='paperType', 
+         value='price',
+         na.rm = T) %>%
+  group_by(rarity,paperType) %>%
+  summarise_at('price',mean,rm.na = T) %>%
+  plot_ly(
+    x = ~rarity,
+    y = ~price,
+    color = ~paperType,
+    type ='bar',
+    mode ='marker'
+  ) %>%
+  layout(
+    title = list(text = 'Mean price by rarity and card type', x=0.02)
+  )
+```
+
+However, the 'rare' physical cards fetched the highest prices overall by far.
+```{r, warning=FALSE}
+# rarity vs price
+cards[,c("rarity","mtgo","mtgoFoil","paper","paperFoil")] %>% 
+  gather(mtgo,mtgoFoil,paper,paperFoil, 
+         key='paperType', 
+         value='price',
+         na.rm = T) %>%
+  group_by(rarity,paperType) %>%
+  summarise_at('price',max,rm.na = T) %>%
+  plot_ly(
+    x = ~rarity,
+    y = ~price,
+    color = ~paperType,
+    type ='bar',
+    mode ='marker'
+  ) %>%
+  layout(
+    title = list(text = 'Maximum price by rarity and card type', x=0.02)
+  )
+```
+
+
+
+## Hall of Fame
+
+The following artist have made art for cards that sold for over $1000.
+```{r, warning=FALSE}
+# artist vs price
+cards[,c("artist","mtgo","mtgoFoil","paper","paperFoil")] %>% 
+  gather(mtgo,mtgoFoil,paper,paperFoil, 
+         key='paperType', 
+         value='price',
+         na.rm = T) %>% 
+  filter(!is.na(artist) & price >= 1000) %>%
+  ggplot(aes(x = artist, y = price, fill=I('blueviolet'))) + 
+  geom_col(position='dodge') + 
+  theme(axis.text.x = element_text(angle = 90))+
+  geom_hline(aes(yintercept=1000),linetype=2) + 
+  geom_text(aes(1,1000,label = 1000, vjust = -1)) + 
+  labs(title = 'Artists', caption='Greater than $1000') +
+  xlab('Artist') + 
+  ylab('Price (USD)')
+```
+
