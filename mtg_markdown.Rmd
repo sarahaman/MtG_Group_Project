@@ -1,0 +1,172 @@
+---
+title: "Magic Card Data Project"
+author: "Conor Howlett"
+date: "11/09/2020"
+output: html_document
+---
+```{r, message=FALSE, warning=FALSE}
+#loading the packages
+library(tidyverse)
+library(plotly)
+library(ggplot2)
+library(gganimate)
+library(magick)
+library(gifski)
+library(png)
+
+#the card data read from csv, stored as dataframe
+mtg <- read.csv('cleanData_New.csv', header = T)
+mtg <- as.data.frame(mtg)
+
+#converting string data to numeric
+mtg[,'power'] <- as.numeric(mtg[,'power'])
+mtg[,'toughness'] <- as.numeric(mtg[,'toughness'])
+```
+
+```{r, message=FALSE, warning=FALSE}
+#filtering the data to remove NA's and outliers, aggregating toughness/power into "stats"
+mtg.0 <- mtg %>%
+  replace_na(list(toughness = 0, power = 0)) %>%
+  mutate(stats = power + toughness) %>%
+  filter(convertedManaCost < 100)
+
+#fitting linear regression line
+fit <- lm(convertedManaCost ~ stats, data=mtg.0)
+
+#creating plot
+fig <- plot_ly(data = mtg.0) %>%
+  add_markers(x = ~stats, y = ~convertedManaCost) %>%
+  add_lines(x = ~stats, y = fitted(fit)) %>%
+  layout(showlegend = F) %>%
+  layout(xaxis = list(title = "Card Stats"), yaxis = list(title = "Mana Cost")) %>%
+  layout(title="Creature Stats vs Mana Cost Regression")
+
+fig
+```
+
+
+```{r, message=FALSE, warning=FALSE}
+#subsetting the data for creature cards
+# removing NA's
+#gouping by creature subtype and summarising 
+mtg.1 <- mtg %>%
+  filter(type == 'Creature') %>%
+  replace_na(list(toughness = 0, power = 0)) %>%
+  mutate(stats = power + toughness) %>%
+  select(stats, convertedManaCost, subtypes) %>%
+  group_by(subtypes) %>%
+  summarise_at(vars(stats:convertedManaCost), mean, na.rm = TRUE)
+
+
+# Initiating the interactive plot
+fig1 <- plot_ly(data = mtg.1, x = ~stats, y = ~convertedManaCost, color = ~subtypes)
+
+# Adding title to the axis legend
+fig1 <- fig1 %>%
+  layout(xaxis = list(title = "Mean Creature Stats"), yaxis = list(title = "Mean Mana Cost"))
+
+# Adding title to plot, creating interactive markers for each point
+fig1 <- fig1 %>% layout(showlegend = FALSE,
+                      title='Mean Mana Cost and Stats by Subtype') %>%
+  add_markers(hoverinfo = 'text',
+              text = ~paste('</br> Subtype: ', subtypes,
+                            '</br> Creature Stats: ', stats,
+                            '</br> Mean Mana Cost: ', convertedManaCost))
+
+fig1
+```
+
+```{r, message=FALSE, warning=FALSE}
+# Subsetting the data to show only creatures
+# Then groups by subtypes and total stats
+# Last, summarises the mean mana cost for each group
+
+mtg.2 <- mtg %>%
+  filter(type == 'Creature') %>%
+  replace_na(list(toughness = 0, power = 0)) %>%
+  mutate(stats = power + toughness) %>%
+  select(stats, convertedManaCost, subtypes) %>%
+  group_by(subtypes, stats) %>%
+  summarise(meanManaCost = mean(convertedManaCost))
+
+
+# Initiates the interactive plot
+fig2 <- plot_ly(data = mtg.2, x = ~stats, y = ~meanManaCost, color = ~subtypes)
+
+# Adds title to the axes legend
+fig2 <- fig2 %>%
+  layout(xaxis = list(title = "Creature Stats"), yaxis = list(title = "Mean Mana Cost"))
+
+# Adss title to plot, then creates interactive markers for each point
+fig2 <- fig2 %>% layout(showlegend = FALSE,
+                      title='Mean Mana Cost by Creature Stats and Subtype') %>%
+  add_markers(hoverinfo = 'text',
+              text = ~paste('</br> Subtype: ', subtypes,
+                            '</br> Creature Stats: ', stats,
+                            '</br> Mean Mana Cost: ', meanManaCost))
+
+fig2
+```
+
+```{r, message=FALSE, warning=FALSE}
+# reading the market data csv
+marketDf <- read.csv('MTG Market Info.csv', header=TRUE)
+#removing the symbols and converting to numeric
+marketDf$Market.Price = as.numeric(gsub("\\$", "", marketDf$Market.Price))
+marketDf$Listed.Median = as.numeric(gsub("\\$", "", marketDf$Listed.Median))
+#stripping whitespace from strings
+marketDf$Rarity = gsub(" ", "", marketDf$Rarity, fixed = TRUE)
+
+#filtering data to remove outliers
+marketDf1 <- marketDf %>%
+  filter(Listed.Median <= 50, Market.Price <= 50)
+
+#plotting the data in ggplot
+p <- ggplot(
+  marketDf1,
+  aes(x = Listed.Median, y = Market.Price, color = Rarity)
+) +
+  geom_point(show.legend = FALSE, alpha =0.7) +
+  scale_color_viridis_d() +
+  scale_size(range = c(1, 12)) +
+  scale_x_log10() +
+  labs(x = "Listed Median Price", y="Market Price") +
+  ggtitle('Market Price vs Listed Median Price by Set')
+
+#printing the static ggplot
+p
+
+#adding an animated transition for the plot in gganimate
+a <- p + transition_states(Set.Name) +
+  labs(title = "Set: {closest_state}")
+
+#creating parameters and rendering the animation as GIF with gifski
+animate(a, fps = 3, width = 750, height = 450, renderer=gifski_renderer())
+
+```
+
+```{r, message=FALSE, warning=FALSE}
+#subsetting the data and summarizing by grouped set and rarity
+marketDf2 <- marketDf %>%
+  select(Set.Name, Rarity, Listed.Median) %>%
+  filter(Rarity=="C" | Rarity=="U" | Rarity=="R" | Rarity=="M") %>%
+  na.omit() %>%
+  group_by(Set.Name,Rarity) %>%
+  summarise(mean.listed = mean(Listed.Median)) %>%
+  filter(mean.listed <= 40)
+
+#creating bar chart in ggplot
+p<-ggplot(data=marketDf2, aes(x=Rarity, y=mean.listed, fill=Rarity)) +
+  geom_bar(stat="identity") +
+  scale_fill_hue(c=45, l=80) +
+  labs(title = 'Mean Card Value by Rarity and Set',
+        y = "Mean Listed Price")
+
+p
+#converting plot into animated timelapse(by set)
+a <- p + transition_states(Set.Name) +
+  labs(title= "Set: {closest_state}")
+
+#rendering plot as a GIF
+animate(a, fps = 3, width = 750, height = 450, renderer=gifski_renderer())
+```
